@@ -18,6 +18,7 @@ application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 @csrf_exempt
 def telegram_webhook(request):
     if request.method == 'POST':
+        print("Webhook received")
         update = Update.de_json(json.loads(request.body), application.bot)
         application.update_queue.put_nowait(update)
         return JsonResponse({'status': 'ok'})

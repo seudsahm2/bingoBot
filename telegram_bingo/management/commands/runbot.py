@@ -29,6 +29,8 @@ class Command(BaseCommand):
         async def main():
             request = HTTPXRequest(connect_timeout=25.0, read_timeout=25.0)
             app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(request).build()
+            import os
+            print(os.getenv("TELEGRAM_BOT_TOKEN"))
 
             app.add_handler(CommandHandler("start", start_command))
             app.add_handler(CommandHandler("create", create_command))
