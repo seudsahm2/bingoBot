@@ -7,14 +7,11 @@ from telegram.ext import Application, CommandHandler
 import os
 from dotenv import load_dotenv
 import asyncio
-
-# Load environment variables
 load_dotenv()
-
-# Get bot token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-# Import command functions
+# Add your command handlers here
 from Bot.commands import (
     start_command,
     join_command,
@@ -22,47 +19,26 @@ from Bot.commands import (
     create_command,
     mark_command
 )
+application.add_handler(CommandHandler("start", start_command))
+application.add_handler(CommandHandler("create", create_command))
+application.add_handler(CommandHandler("join", join_command))
+application.add_handler(CommandHandler("card", card_command))
+application.add_handler(CommandHandler("mark", mark_command))
 
-# Initialize bot application (do not start it here)
-application = None
+logger = logging.getLogger(__name__)
 
-async def start_bot():
-    global application
-    if application is None:
-        request = HTTPXRequest(connect_timeout=25.0, read_timeout=25.0)
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).build()
-
-        # Register bot commands
-        application.add_handler(CommandHandler("start", start_command))
-        application.add_handler(CommandHandler("create", create_command))
-        application.add_handler(CommandHandler("join", join_command))
-        application.add_handler(CommandHandler("card", card_command))
-        application.add_handler(CommandHandler("mark", mark_command))
-
-        # Start the application
-        await application.initialize()
-        await application.start()
-        print("Bot started successfully")
-
-# Webhook view to receive Telegram updates
 @csrf_exempt
-def telegram_webhook(request):
-    print(f"Received request: {request.method} {request.body}")
+async def telegram_webhook(request):
+    logger.info("Received webhook request")
     if request.method == 'POST':
-        if application is None:
-            return JsonResponse({'status': 'bot not initialized'}, status=500)
-        
-        try:
-            # Parse the update sent by Telegram
-            update = Update.de_json(json.loads(request.body), application.bot)
-            
-            # Process the update
-            asyncio.create_task(application.process_update(update))
-            
-            return JsonResponse({'status': 'ok'})
-        except Exception as e:
-            print(f"Error processing update: {e}")
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-    
-    # If not a POST request, return 405 error
-    return JsonResponse({'status': 'method not allowed'}, status=405)
+        logger.info("Processing POST request")
+        body = await request.body()
+        logger.info("Request body received")
+        update = Update.de_json(json.loads(body.decode('utf-8')), application.bot)
+        logger.info("Update created")
+        await application.process_update(update)
+        logger.info("Update processed")
+        return JsonResponse({'status': 'ok'})
+    else:
+        logger.info("Method not allowed")
+        return JsonResponse({'status': 'method not allowed'}, status=405)
