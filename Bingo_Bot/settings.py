@@ -25,8 +25,9 @@ SECRET_KEY = 'django-insecure-cco@u82v^tpd$fz6&o23-8#wy3%i&vnz!re6_k8flsxon1zp2u
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["https://bingobot-oe46.onrender.com"]
 
+SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
+ALLOWED_HOSTS = ['bingobot-oe46.onrender.com', 'localhost', '127.0.0.1']
 
 # Application definition
 
