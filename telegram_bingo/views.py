@@ -7,6 +7,7 @@ from telegram.ext import Application, CommandHandler
 import os
 from dotenv import load_dotenv
 import asyncio
+import logging
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
