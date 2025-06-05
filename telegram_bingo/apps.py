@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 import asyncio
-
+import os
 class TelegramBingoConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'telegram_bingo'
