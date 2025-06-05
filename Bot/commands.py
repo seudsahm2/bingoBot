@@ -1,10 +1,25 @@
 # commands.py
 
+
+
+
+#   i was trying to fix  whn a user picks prviously picked number.
+#   i fixed it but did not check it. chck that
+#   i tried to implemeent a gameoveer cases but i think only the simple case is implmented
+#   but even i did not check that so chck it. if works check the othr cases also. 
+#   if not implmnted then implement it. refeer back the prompt chatgpt give me then ask that
+#   i want to implment users can direecttly play from the private chat
+#   but as the game is in group chat so i need to forward the meessages to the group automatically
+#   this is becuase it is good if thee user directly plays whilee seeing thee card
+#   otherwise the game will not be that fun and players frustrate going here nad there to mark and to see thir card
+
+
+
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut
 import random
-from bingo.game import BingoGame,bingo_sessions
+from Bingo.game import BingoGame,bingo_sessions
 
 
 # Command: /start
@@ -91,40 +106,60 @@ async def mark_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # Check if number argument is provided
+    # Determine a reply method that works based on the type of update
+    async def reply(text, parse_mode=None):
+        if update.message:
+            await update.message.reply_text(text, parse_mode=parse_mode)
+        elif update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(text, parse_mode=parse_mode)
+        else:
+            print("⚠️ Could not reply: update.message and update.callback_query are both None.")
+
+    # Validate the provided argument
     if len(context.args) != 1 or not context.args[0].isdigit():
-        await update.message.reply_text("Usage: /mark <number>")
+        await reply("❌ Usage: /mark <number>")
         return
 
     number = int(context.args[0])
 
-    # Retrieve the game session for this chat
+    # Get the active Bingo game session
     game = bingo_sessions.get(chat_id)
     if not game:
-        await update.message.reply_text("No active game in this chat. Use /create to start.")
+        await reply("🚫 No active game in this chat. Use /create to start one.")
         return
 
+    # Submit the number and get result
     success, message, won = game.submit_number(user_id, number)
-    await update.message.reply_text(message)
 
+    await reply(message)
+
+    # If marking was successful, update all player cards
     if success:
-        # Show updated cards for all players privately (You must implement sending cards privately)
         for pid in game.players:
             card_text = game.get_card_text(pid)
             try:
-                await safe_send_message(context.bot,pid, f"Updated Bingo Card:\n<pre>{card_text}</pre>", parse_mode="HTML")
+                await safe_send_message(
+                    context.bot,
+                    pid,
+                    f"📋 Updated Bingo Card:\n<pre>{card_text}</pre>",
+                    parse_mode="HTML"
+                )
             except Exception as e:
-                print(f"Failed to send card to user {pid}: {e}")
+                print(f"❌ Failed to send card to user {pid}: {e}")
 
-        # Announce who's turn is next in the group
+        # If the player won
         if won:
             winner_mention = f"<a href='tg://user?id={user_id}'>Player</a>"
-            await update.message.reply_text(f"BINGO! {winner_mention} has won the game! 🎉", parse_mode="HTML")
-            # Optionally end the game or reset here
+            await reply(f"🎉 BINGO! {winner_mention} has won the game!", parse_mode="HTML")
         else:
             next_player = game.get_current_player()
-            await update.message.reply_text(f"It's now <a href='tg://user?id={next_player}'>player's</a> turn.", parse_mode="HTML")
-            
+            await reply(f"👉 It's now <a href='tg://user?id={next_player}'>player's</a> turn.", parse_mode="HTML")
+
+    if game.game_over:
+        del bingo_sessions[chat_id]
+        await reply("🏁 The game is over. Use /create to start a new game.")
+
     
 async def safe_send_message(bot, chat_id, text, **kwargs):
     max_retries = 3  # number of retries

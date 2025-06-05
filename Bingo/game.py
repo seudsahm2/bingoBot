@@ -1,166 +1,165 @@
 import random
 
 bingo_sessions = {}
+
 class BingoGame:
     def __init__(self):
-        self.players = {}  # user_id -> player's card (2D list)
-        self.turn_order = []  # list of user_ids in turn order
-        self.current_turn_index = 0  # index of who's turn it is
-        self.called_numbers = set()  # numbers that have been called (marked by any player)
-        self.mark_symbols = {}  # user_id -> symbol to mark their called numbers
-        self.completed_lines = {}  # user_id -> list of completed lines identifiers
-        self.line_mark_letters = ['B', 'I', 'N', 'G', 'O']  # 5 possible lines for Bingo
-        
+        # user_id -> card (2D list of numbers)
+        self.players = {}
+
+        # user_id -> {"card": 2D list, "self_marks": set, "enemy_marks": set}
+        self.player_cards = {}
+
+        self.turn_order = []  # player turn order
+        self.current_turn_index = 0  # whose turn
+        self.completed_lines = {}  # user_id -> completed lines (for BINGO)
+        self.line_mark_letters = ['B', 'I', 'N', 'G', 'O']
+        self.called_numbers = set()  # ✅ required to track already picked numbers
+        self.mark_symbols = {}  # user_id -> symbol for marking (e.g. colored circle)
+        self.game_over = False  # flag to indicate if game is over
+
     def generate_card(self):
+        # Generate a 5x5 bingo card with unique random numbers from 1 to 25
         nums = random.sample(range(1, 26), 25)
         card = [nums[i * 5:(i + 1) * 5] for i in range(5)]
         return card
-    
-    def get_card_text(self, user_id):
-        """
-        Returns a formatted string representing the player's card,
-        with columns labeled B I N G O and showing numbers or marked symbols.
-        """
-
-        if user_id not in self.players:
-            return "You don't have a card yet."
-
-        card = self.players[user_id]
-
-        # Header row for Bingo columns
-        header = " B  I  N  G  O\n"
-
-        # Each row of the card
-        rows_text = []
-        for row in card:
-            row_str = ""
-            for cell in row:
-                # cell could be a number (int) or a mark symbol / letter (str)
-                if isinstance(cell, int):
-                    # Format numbers with leading spaces for alignment
-                    row_str += f"{cell:2d} "
-                else:
-                    # For symbols or letters, just print them with a space
-                    row_str += f"{cell}  "
-            rows_text.append(row_str.rstrip())
-
-        # Combine header and rows
-        card_text = header + "\n".join(rows_text)
-        return card_text
 
     def add_player(self, user_id):
         if user_id in self.players:
-            return False  # already joined
+            return False  # player already in game
+
         card = self.generate_card()
         self.players[user_id] = card
-        self.turn_order.append(user_id)
-        self.mark_symbols[user_id] = chr(0x1F7E6 + len(self.mark_symbols))  # 🟦🟩🟨🟧🟥 (colored squares)
+
+        self.player_cards[user_id] = {
+            "card": card,
+            "self_marks": set(),  # player's own picks
+            "enemy_marks": set(),  # others' picks that affect this card
+        }
+
+        default_symbols = ["🔵", "🟡", "🔴", "🟢", "🟣", "🟠"]
+        self.mark_symbols[user_id] = default_symbols[len(self.mark_symbols) % len(default_symbols)]
+        self.completed_lines[user_id] = []
+        
+            # ✅ Setup turn order once 2 players have joined
+        if len(self.players) == 2:
+            self.turn_order = list(self.players.keys())
+            self.current_turn_index = 0  # start from first player
+
         return True
 
     def get_current_player(self):
+        # Return current player whose turn it is
         if not self.turn_order:
             return None
         return self.turn_order[self.current_turn_index]
 
     def next_turn(self):
+        # Advance to next player's turn
         self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
 
     def submit_number(self, user_id, number):
-        # Check if it's this user's turn
+        # ✅ If game is over, block further action
+        if self.game_over:
+            return False, "❌ Game is already over.", False
+        # Check turn validity
         if self.get_current_player() != user_id:
             return False, "It's not your turn.", False
 
-        if number not in [num for row in self.players[user_id] for num in row]:
+        # Number must exist in caller's own card
+        if number not in [cell for row in self.players[user_id] for cell in row]:
             return False, "Number not on your card.", False
 
         if number in self.called_numbers:
             return False, "Number already called.", False
 
+        # Add to global called numbers set
+        self.called_numbers.add(number)
 
-        # Mark the number for all players on their cards
-        symbol = self.mark_symbols[user_id]
-        for pid, card in self.players.items():
+        # ✅ Mark number on each player's card
+        for pid, pdata in self.player_cards.items():
+            card = pdata["card"]
             for r in range(5):
                 for c in range(5):
                     if card[r][c] == number:
-                        card[r][c] = symbol
+                        card[r][c] = self.mark_symbols[pid]
+                        if pid == user_id:
+                            pdata["self_marks"].add(self.mark_symbols[pid])
+                        else:
+                            pdata["enemy_marks"].add(self.mark_symbols[pid])
 
-        # Add number to called numbers
-        self.called_numbers.add(number)
-        
-        # Check if this player won
+        # ✅ Check win only for the current player
         won = self.check_winner(user_id)
+        # ✅ If player won, mark game as over
+        if won:
+            self.game_over = True
+            return True, f"Number {number:02} marked. BINGO! 🎉", True
 
-        # Move to next turn
+        # Next player's turn
         self.next_turn()
 
-        return True, f"Number {number:02} marked for player.",won
+        return True, f"Number {number:02} marked on all cards.", False
 
-    # You can add more methods for checking win, formatting cards, etc.
+
     def check_winner(self, user_id):
         """
-        Check if the user completed any new row, column or diagonal.
-        Mark the new lines on the card with the respective letter.
-        Return True if the user has won (5 lines completed).
+        Checks rows, cols, and diagonals to track completed lines.
+        A line is complete if all its numbers are in self_marks or enemy_marks.
+        Only self_marks count toward BINGO.
         """
+        pdata = self.player_cards[user_id]
+        card = pdata["card"]
+        marks = pdata["self_marks"]  # only own marks count
 
-        card = self.players[user_id]
-        if user_id not in self.completed_lines:
-            self.completed_lines[user_id] = []
-
-        new_completed = []
-
-        # Helper to check if a line is fully marked (only symbols or letters, no numbers)
-        def line_completed(cells):
-            # For our game, a cell is either a symbol (str) or a number (int)
-            # A line is complete if no cell is int (numbers), i.e. all replaced
-            return all(isinstance(x, str) for x in cells)
+        completed = self.completed_lines[user_id]
 
         # Check rows
         for r in range(5):
-            if ('row', r) not in self.completed_lines[user_id]:
-                if line_completed(card[r]):
-                    new_completed.append(('row', r))
+            if all(card[r][c] in marks for c in range(5)) and f"row{r}" not in completed:
+                completed.append(f"row{r}")
 
         # Check columns
         for c in range(5):
-            col = [card[r][c] for r in range(5)]
-            if ('col', c) not in self.completed_lines[user_id]:
-                if line_completed(col):
-                    new_completed.append(('col', c))
+            if all(card[r][c] in marks for r in range(5)) and f"col{c}" not in completed:
+                completed.append(f"col{c}")
 
         # Check diagonals
-        diag1 = [card[i][i] for i in range(5)]
-        if ('diag', 1) not in self.completed_lines[user_id]:
-            if line_completed(diag1):
-                new_completed.append(('diag', 1))
+        if all(card[i][i] in marks for i in range(5)) and "diag1" not in completed:
+            completed.append("diag1")
+        if all(card[i][4 - i] in marks for i in range(5)) and "diag2" not in completed:
+            completed.append("diag2")
+        return len(completed) >= 5  # BINGO if 5 or more lines completed
 
-        diag2 = [card[i][4 - i] for i in range(5)]
-        if ('diag', 2) not in self.completed_lines[user_id]:
-            if line_completed(diag2):
-                new_completed.append(('diag', 2))
+    def get_card_text(self, user_id):
+        """
+        Renders a user's card with:
+        🔵 for their own picks,
+        🟡 for enemy picks,
+        numbers otherwise.
+        Shows BINGO progress.
+        """
+        if user_id not in self.player_cards:
+            return "You don't have a card yet."
 
-        # For each new completed line, mark it on the card with the letter
-        for line in new_completed:
-            if len(self.completed_lines[user_id]) < 5:
-                letter = self.line_mark_letters[len(self.completed_lines[user_id])]
-                self.completed_lines[user_id].append(line)
-                # Mark the entire line with this letter
-                if line[0] == 'row':
-                    r = line[1]
-                    for c in range(5):
-                        card[r][c] = letter
-                elif line[0] == 'col':
-                    c = line[1]
-                    for r in range(5):
-                        card[r][c] = letter
-                elif line[0] == 'diag':
-                    if line[1] == 1:
-                        for i in range(5):
-                            card[i][i] = letter
-                    elif line[1] == 2:
-                        for i in range(5):
-                            card[i][4 - i] = letter
+        card = self.player_cards[user_id]["card"]
+        self_marks = self.player_cards[user_id]["self_marks"]
+        enemy_marks = self.player_cards[user_id]["enemy_marks"]
+        progress = self.line_mark_letters[:len(self.completed_lines[user_id])]
 
-        # Return True if player completed all 5 lines (i.e., BINGO)
-        return len(self.completed_lines[user_id]) == 5
+        header = " B  I  N  G  O\n"
+        rows = []
+        for r in range(5):
+            row_str = ""
+            for c in range(5):
+                num = card[r][c]
+                if num in self_marks:
+                    row_str += "🔵 "
+                elif num in enemy_marks:
+                    row_str += "🟡 "
+                elif isinstance(num, int):
+                    row_str += f"{num:02} "
+                else:
+                    row_str += "?? "
+            rows.append(row_str.strip())
+
+        return header + "\n".join(rows) + f"\n\nProgress: {''.join(progress)}"
