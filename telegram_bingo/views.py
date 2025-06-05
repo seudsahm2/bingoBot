@@ -43,8 +43,10 @@ async def telegram_webhook(request):
     if request.method == 'POST':
         logger.info("Processing POST request")
         try:
-            body = await request.body()
+            # Get the request body as bytes
+            body = request.body
             logger.debug(f"Request body: {body.decode('utf-8')}")
+            # Parse bytes to JSON
             update = Update.de_json(json.loads(body.decode('utf-8')), application.bot)
             logger.info("Update created")
             if update is None:
