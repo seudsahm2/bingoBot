@@ -6,12 +6,12 @@ import asyncio
 import nest_asyncio
 from dotenv import load_dotenv
 from django.core.management.base import BaseCommand  # Required for custom command
-
+load_dotenv()
 class Command(BaseCommand):
     help = 'Runs the Telegram bot'
 
     def handle(self, *args, **kwargs):
-        load_dotenv()
+        
 
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         sys.path.append(BASE_DIR)

@@ -13,7 +13,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Initialize your bot application (ensure this is done only once)
-application = Application.builder().token('YOUR_BOT_TOKEN').build()
+application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
 @csrf_exempt
 def telegram_webhook(request):
